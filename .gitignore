@@ -133,3 +133,5 @@ Pipfile.lock
 
 # PyCharm
 .idea/
+
+*txt
