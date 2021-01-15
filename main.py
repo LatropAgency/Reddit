@@ -6,20 +6,20 @@ from datetime import datetime
 
 def save(parsed_posts):
     lines = []
-    for parsed_post in parsed_posts:
+    for parsed_post in parsed_posts.values():
         lines.append(';'.join(parsed_post.values()) + '\n')
     with open(f'{datetime.today().strftime("%Y%m%d%H%M")}.txt', "w") as file:
         file.writelines(lines)
 
 
 def parse_posts(posts):
-    parsed_posts = []
+    parsed_posts = {}
     for post in posts:
         parsed_post = {}
         unique_id = str(uuid.uuid1())
         parsed_post['unique_id'] = unique_id
         parsed_post['url'] = post.find('a', class_='_3jOxDPIQ0KaOWpzvSQo-1s')['href']
-        parsed_posts.append(parsed_post)
+        parsed_posts[unique_id] = parsed_post
     return parsed_posts
 
 
