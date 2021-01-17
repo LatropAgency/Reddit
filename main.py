@@ -24,7 +24,7 @@ def save(parsed_posts):
         file.writelines([';'.join(parsed_post.values()) + '\n' for parsed_post in parsed_posts])
 
 
-def parse_posts(driver, url, parsed_posts):
+def parse_post(driver, url, parsed_posts):
     parsed_post = {}
     unique_id = str(uuid.uuid1())
     parsed_post['unique_id'] = unique_id
@@ -51,7 +51,7 @@ def parse(driver, parsed_posts):
         links = links[index:len(links)]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         for link in links:
-            parse_posts(driver, link.get_attribute('href'), parsed_posts)
+            parse_post(driver, link.get_attribute('href'), parsed_posts)
             index += 1
             if (len(parsed_posts)) == 100:
                 break
