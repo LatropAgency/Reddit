@@ -34,7 +34,7 @@ def parse_post(driver, url, parsed_posts):
     all_han = driver.window_handles
     new_han = [x for x in all_han if x != parent_han][0]
     driver.switch_to.window(new_han)
-    if get_posts_info(driver, parsed_post):
+    if get_post_info(driver, parsed_post):
         parsed_posts.append(parsed_post)
         print(len(parsed_posts), parsed_post)
     driver.close()
@@ -57,7 +57,7 @@ def parse(driver, parsed_posts):
                 break
 
 
-def get_posts_info(driver, parsed_post):
+def get_post_info(driver, parsed_post):
     driver.get(parsed_post['url'])
     wait = WebDriverWait(driver, 10)
     user_elem = driver.find_element_by_css_selector(
