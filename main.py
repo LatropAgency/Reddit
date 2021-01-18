@@ -1,6 +1,9 @@
 import logging
 import argparse
+import sys
 from contextlib import contextmanager
+from logging import handlers
+from logging import config
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
@@ -54,7 +57,7 @@ def post_count_validator(arg):
 
 
 def logmode_validator(arg):
-    if arg in ['w', 'a']:
+    if arg in ['ALL', 'ERROR', 'WARNING', 'DISABLE']:
         return arg
     raise argparse.ArgumentTypeError("Unknown mode")
 
@@ -85,12 +88,38 @@ def open_tab(driver, url):
         driver.switch_to.window(parent_handler)
 
 
+class StdoutFilter(logging.Filter):
+
+    def __init__(self, logmode):
+        self.logmode = logmode
+
+    def filter(self, record):
+        return record.levelno in self.logmode
+
+
 def init_logger(logmode):
+    logmodes = {
+        'ALL': (logging.DEBUG, logging.INFO, logging.ERROR, logging.WARNING, logging.CRITICAL, logging.NOTSET),
+        'ERROR': (logging.ERROR,),
+        'WARNING': (logging.WARNING,),
+        'DISABLE': (),
+    }
+
     format = '%(asctime)s - %(levelname)s - %(message)s'
-    logging.basicConfig(filename='app.log',
-                        format=format,
-                        level=logging.DEBUG,
-                        filemode=logmode)
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+
+    format = logging.Formatter(format)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.addFilter(StdoutFilter(logmodes[logmode]))
+    ch.setFormatter(format)
+    log.addHandler(ch)
+
+    fh = handlers.RotatingFileHandler('app.log')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(format)
+    log.addHandler(fh)
 
 
 def init_driver():
@@ -117,8 +146,10 @@ def parse_post(driver, url, parsed_posts):
     parsed_post = {}
     parsed_post['unique_id'] = str(uuid.uuid1())
     parsed_post['url'] = url
+
     with open_tab(driver, url):
         get_post_info(driver, parsed_post)
+
         if get_user_info(driver, parsed_post):
             parsed_posts.append(parsed_post)
             logging.info(f'Successfully parse: {len(parsed_posts)}')
@@ -128,15 +159,19 @@ def parse(driver, parsed_posts, count):
     logging.info(f'Parse is starting with count: {count}')
     driver.get('https://www.reddit.com/top/?t=month')
     index = 0
+
     while len(parsed_posts) < count:
         links = driver.find_elements_by_css_selector(CSS_SELECTORS['POST_LINK'])
         links = links[index:len(links)]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
         for link in links:
             parse_post(driver, link.get_attribute('href'), parsed_posts)
             index += 1
+
             if (len(parsed_posts)) == count:
                 break
+
     logging.info(f'{count} posts successfully processed')
 
 
@@ -176,7 +211,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Reddit parser')
     parser.add_argument('--count', required=False, default=100, type=post_count_validator,
                         help='Count of post to parse')
-    parser.add_argument('--logmode', required=False, default='a', type=logmode_validator, help='Log mode')
+    parser.add_argument('--logmode', required=False, default='ALL', type=logmode_validator,
+                        help='Log mode  - ALL - all levers, ERROR - only ERROR lever, WARNING - only WARNING lever, DISABLE - no console console log')
     args = parser.parse_args()
     parsed_posts = []
     init_logger(args.logmode)
