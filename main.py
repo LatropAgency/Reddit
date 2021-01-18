@@ -27,7 +27,7 @@ CONSTANTS = {
     'POST_LINK_CSS_SELECTOR': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
     'USER_CSS_SELECTOR': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
     'USER_CARD_CSS_SELECTOR': 'div._m7PpFuKATP9fZF4xKf9R',
-    'CARD_KARMA_CLASS': '_18aX_pAQub_mu1suz4-i8j',
+    'CARD_KARMA_CSS_SELECTOR': 'div._18aX_pAQub_mu1suz4-i8j',
 }
 
 
@@ -38,44 +38,35 @@ def get_element_text(driver, css_selector):
 
 
 def show_element(driver, css_selector):
-    date_posted_elem = driver.find_element_by_css_selector(css_selector)
-    ActionChains(driver).move_to_element(date_posted_elem).perform()
+    element = driver.find_element_by_css_selector(css_selector)
+    ActionChains(driver).move_to_element(element).perform()
+    return element
 
 
-def get_user_info(driver, parsed_post):
-    parsed_post['username'] = get_element_text(driver, CONSTANTS['USER_CSS_SELECTOR']).split('/')[1]
-    user_elem = driver.find_element_by_css_selector(CONSTANTS['USER_CSS_SELECTOR'])
-    ActionChains(driver).move_to_element(user_elem).perform()
-    WebDriverWait(driver, 10).until(
-        ec.presence_of_element_located((By.CSS_SELECTOR, CONSTANTS['USER_CARD_CSS_SELECTOR'])))
-    html = driver.page_source
-    soup = BeautifulSoup(html)
-    parsed_post['post_karma'], parsed_post['comment_karma'] = (elem.text for elem in
-                                                               soup.find_all(class_=CONSTANTS['CARD_KARMA_CLASS']))
-    user_elem.click()
+@contextmanager
+def open_webdriver():
+    driver = init_driver()
     try:
-        parsed_post['user_karma'] = get_element_text(driver, CONSTANTS['USER_KARMA_CSS_SELECTOR'])
-        parsed_post['cake_day'] = get_element_text(driver, CONSTANTS['CAKE_DAY_CSS_SELECTOR'])
-        return parsed_post
-    except TimeoutException:
-        return False
+        yield driver
+    finally:
+        driver.quit()
 
 
 @contextmanager
 def open_tab(driver, url):
-    parent_han = driver.window_handles[0]
+    parent_handler = driver.window_handles[0]
     driver.execute_script("window.open('');")
     logging.info('New tab is opened')
-    all_han = driver.window_handles
-    new_han = [x for x in all_han if x != parent_han][0]
-    driver.switch_to.window(new_han)
+    all_handlers = driver.window_handles
+    new_handler = [x for x in all_handlers if x != parent_handler][0]
+    driver.switch_to.window(new_handler)
     driver.get(url)
     try:
         yield
     finally:
         driver.close()
         logging.info('Tab is closed')
-        driver.switch_to.window(parent_han)
+        driver.switch_to.window(parent_handler)
 
 
 def init_logger():
@@ -89,7 +80,7 @@ def init_driver():
     options.add_argument("start-maximized")
     options.add_argument("disable-infobars")
     options.add_argument("--disable-extensions")
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
     logging.info('WebDriver is initialized')
     return driver
@@ -103,8 +94,7 @@ def save(parsed_posts):
 
 def parse_post(driver, url, parsed_posts):
     parsed_post = {}
-    unique_id = str(uuid.uuid1())
-    parsed_post['unique_id'] = unique_id
+    parsed_post['unique_id'] = str(uuid.uuid1())
     parsed_post['url'] = url
     with open_tab(driver, url):
         get_post_info(driver, parsed_post)
@@ -147,12 +137,28 @@ def get_post_info(driver, parsed_post):
     parsed_post['category'] = get_element_text(driver, CONSTANTS['CATEGORY_CSS_SELECTOR']).split('/')[1]
 
 
+def get_user_info(driver, parsed_post):
+    wait = WebDriverWait(driver, 10)
+    parsed_post['username'] = get_element_text(driver, CONSTANTS['USER_CSS_SELECTOR']).split('/')[1]
+    user_element = show_element(driver, CONSTANTS['USER_CSS_SELECTOR'])
+    wait.until(ec.presence_of_element_located((By.CSS_SELECTOR, CONSTANTS['USER_CARD_CSS_SELECTOR'])))
+    card_element = driver.find_elements_by_css_selector(CONSTANTS['CARD_KARMA_CSS_SELECTOR'])
+    parsed_post['post_karma'] = card_element[0].get_attribute('innerHTML')
+    parsed_post['comment_karma'] = card_element[1].get_attribute('innerHTML')
+    user_element.click()
+    try:
+        parsed_post['user_karma'] = get_element_text(driver, CONSTANTS['USER_KARMA_CSS_SELECTOR'])
+        parsed_post['cake_day'] = get_element_text(driver, CONSTANTS['CAKE_DAY_CSS_SELECTOR'])
+        return True
+    except TimeoutException:
+        return False
+
+
 if __name__ == '__main__':
     start = datetime.now()
     parsed_posts = []
     init_logger()
-    driver = init_driver()
-    parse(driver, parsed_posts, 100)
-    save(parsed_posts)
-    driver.quit()
+    with open_webdriver() as driver:
+        parse(driver, parsed_posts, 4)
+        save(parsed_posts)
     logging.info(f'The duration of the scraping: {datetime.now() - start}')
