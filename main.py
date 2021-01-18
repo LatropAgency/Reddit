@@ -16,59 +16,46 @@ import uuid
 import calendar
 from datetime import datetime
 
+CONSTANTS = {
+    'VOTE_COUNT_CSS_SELECTOR': '._1rZYMD_4xY3gRcSS3p8ODO',
+    'COMMENT_COUNT_CSS_SELECTOR': 'span.FHCV02u6Cp2zYL0fhQPsO',
+    'CAKE_DAY_CSS_SELECTOR': 'span#profile--id-card--highlight-tooltip--cakeday',
+    'USER_KARMA_CSS_SELECTOR': 'span#profile--id-card--highlight-tooltip--karma',
+    'CATEGORY_CSS_SELECTOR': 'span._19bCWnxeTjqzBElWZfIlJb',
+    'POST_DATE_CSS_SELECTOR': 'div._2J_zB4R1FH2EjGMkQjedwc',
+    'POST_HOVER_DATE_CSS_SELECTOR': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
+    'POST_LINK_CSS_SELECTOR': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
+    'USER_CSS_SELECTOR': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
+    'USER_CARD_CSS_SELECTOR': 'div._m7PpFuKATP9fZF4xKf9R',
+    'CARD_KARMA_CLASS': '_18aX_pAQub_mu1suz4-i8j',
+}
 
-def get_vote_count(driver):
-    vote_elem = driver.find_element_by_css_selector('div._1E9mcoVn4MYnuBQSVDt1gC')
-    return vote_elem.find_element_by_class_name('_1rZYMD_4xY3gRcSS3p8ODO').text
+
+def get_element_text(driver, css_selector):
+    return WebDriverWait(driver, 10) \
+        .until(ec.presence_of_element_located((By.CSS_SELECTOR, css_selector))) \
+        .get_attribute('innerHTML')
 
 
-def get_comment_count(driver):
-    comment_elem = driver.find_element_by_css_selector('span.FHCV02u6Cp2zYL0fhQPsO')
-    return comment_elem.text.split(' ')[0]
-
-
-def get_category(driver):
-    category_elem = driver.find_element_by_css_selector('span._19bCWnxeTjqzBElWZfIlJb')
-    return category_elem.get_attribute('innerHTML').split('/')[1]
-
-
-def show_date_post_elem(driver):
-    date_posted_elem = driver.find_element_by_css_selector("a._3jOxDPIQ0KaOWpzvSQo-1s")
+def show_element(driver, css_selector):
+    date_posted_elem = driver.find_element_by_css_selector(css_selector)
     ActionChains(driver).move_to_element(date_posted_elem).perform()
 
 
-def get_username(driver):
-    user_elem = driver.find_element_by_css_selector(
-        "a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE")
-    return user_elem.get_attribute('innerHTML').split('/')[1]
-
-
-def get_cake_day(driver):
-    cake_day = WebDriverWait(driver, 1).until(
-        ec.presence_of_element_located((By.CSS_SELECTOR, "span#profile--id-card--highlight-tooltip--cakeday")))
-    return cake_day.get_attribute('innerHTML')
-
-
-def get_user_karma(driver):
-    karma = WebDriverWait(driver, 1).until(
-        ec.presence_of_element_located((By.CSS_SELECTOR, "span#profile--id-card--highlight-tooltip--karma")))
-    return karma.get_attribute('innerHTML')
-
-
 def get_user_info(driver, parsed_post):
-    parsed_post['username'] = get_username(driver)
-    user_elem = driver.find_element_by_css_selector(
-        "a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE")
+    parsed_post['username'] = get_element_text(driver, CONSTANTS['USER_CSS_SELECTOR']).split('/')[1]
+    user_elem = driver.find_element_by_css_selector(CONSTANTS['USER_CSS_SELECTOR'])
     ActionChains(driver).move_to_element(user_elem).perform()
-    WebDriverWait(driver, 10).until(ec.presence_of_element_located((By.CSS_SELECTOR, "div._m7PpFuKATP9fZF4xKf9R")))
+    WebDriverWait(driver, 10).until(
+        ec.presence_of_element_located((By.CSS_SELECTOR, CONSTANTS['USER_CARD_CSS_SELECTOR'])))
     html = driver.page_source
     soup = BeautifulSoup(html)
     parsed_post['post_karma'], parsed_post['comment_karma'] = (elem.text for elem in
-                                                               soup.find_all(class_='_18aX_pAQub_mu1suz4-i8j'))
+                                                               soup.find_all(class_=CONSTANTS['CARD_KARMA_CLASS']))
     user_elem.click()
     try:
-        parsed_post['user_karma'] = get_user_karma(driver)
-        parsed_post['cake_day'] = get_cake_day(driver)
+        parsed_post['user_karma'] = get_element_text(driver, CONSTANTS['USER_KARMA_CSS_SELECTOR'])
+        parsed_post['cake_day'] = get_element_text(driver, CONSTANTS['CAKE_DAY_CSS_SELECTOR'])
         return parsed_post
     except TimeoutException:
         return False
@@ -131,7 +118,7 @@ def parse(driver, parsed_posts, count):
     driver.get('https://www.reddit.com/top/?t=month')
     index = 0
     while len(parsed_posts) < count:
-        links = driver.find_elements_by_css_selector('a._3jOxDPIQ0KaOWpzvSQo-1s')
+        links = driver.find_elements_by_css_selector(CONSTANTS['POST_LINK_CSS_SELECTOR'])
         print(len(links))
         links = links[index:len(links)]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -144,23 +131,20 @@ def parse(driver, parsed_posts, count):
 
 
 def get_post_date(driver):
-    date_elem = WebDriverWait(driver, 10).until(
-        ec.visibility_of_element_located((By.CSS_SELECTOR, "div._2J_zB4R1FH2EjGMkQjedwc")))
-    post_date = date_elem.text.split(' ')[1:4]
+    show_element(driver, CONSTANTS['POST_HOVER_DATE_CSS_SELECTOR'])
+    post_date = get_element_text(driver, CONSTANTS['POST_DATE_CSS_SELECTOR']).split(' ')[1:4]
     post_date[0] = str(
         dict((month, index) for index, month in enumerate(calendar.month_abbr) if month)[post_date[0]])
     if len(post_date[0]) == 1:
         post_date[0] = f'0{post_date[0]}'
-    return post_date
+    return f'{post_date[2]}-{post_date[0]}-{post_date[1]}'
 
 
 def get_post_info(driver, parsed_post):
-    show_date_post_elem(driver)
-    post_date = get_post_date(driver)
-    parsed_post['post_date'] = f'{post_date[2]}-{post_date[0]}-{post_date[1]}'
-    parsed_post['comment_count'] = get_comment_count(driver)
-    parsed_post['vote_count'] = get_vote_count(driver)
-    parsed_post['category'] = get_category(driver)
+    parsed_post['post_date'] = get_post_date(driver)
+    parsed_post['comment_count'] = get_element_text(driver, CONSTANTS['COMMENT_COUNT_CSS_SELECTOR']).split(' ')[0]
+    parsed_post['vote_count'] = get_element_text(driver, CONSTANTS['VOTE_COUNT_CSS_SELECTOR'])
+    parsed_post['category'] = get_element_text(driver, CONSTANTS['CATEGORY_CSS_SELECTOR']).split('/')[1]
 
 
 if __name__ == '__main__':
