@@ -143,12 +143,11 @@ def save(parsed_posts):
         logging.info(f'Successful saved to {file.name}')
 
 
-def parse_post(post, parsed_posts):
+def parse_post(post, post_link, user_link, parsed_posts):
     parsed_post = {}
     parsed_post['unique_id'] = str(uuid.uuid1())
-    parsed_post['url'] = post.find_element_by_css_selector(CSS_SELECTORS['POST_LINK']).get_attribute('href')
-    user_url = post.find_element_by_css_selector(CSS_SELECTORS['USER']).get_attribute('href')
-    if get_user_info(driver, parsed_post, user_url):
+    parsed_post['url'] = post_link
+    if get_user_info(driver, parsed_post, user_link):
         parsed_posts.append(parsed_post)
         get_post_info(post, parsed_post)
         logging.info(f'Successfully parse: {len(parsed_posts)}')
@@ -160,11 +159,16 @@ def lookup(driver, count):
     index = 0
     parsed_posts = []
     while len(parsed_posts) < count:
+        post_links = driver.find_elements_by_css_selector(CSS_SELECTORS['POST_LINK'])
+        user_links = driver.find_elements_by_css_selector(CSS_SELECTORS['USER'])
         posts = driver.find_elements_by_css_selector(CSS_SELECTORS['POST'])
-        posts = posts[index:len(posts)]
+        min_len = min(len(post_links), len(user_links), len(posts))
+        post_links = post_links[index:min_len]
+        user_links = user_links[index:min_len]
+        posts = posts[index:min_len]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        for post in posts:
-            parse_post(post, parsed_posts)
+        for i, post in enumerate(posts):
+            parse_post(post, post_links[i].get_attribute('href'), user_links[i].get_attribute('href'), parsed_posts)
             index += 1
             if (len(parsed_posts)) == count:
                 break
