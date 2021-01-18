@@ -80,7 +80,7 @@ def init_driver():
     options.add_argument("start-maximized")
     options.add_argument("disable-infobars")
     options.add_argument("--disable-extensions")
-    # options.add_argument("--headless")
+    options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
     logging.info('WebDriver is initialized')
     return driver
@@ -100,7 +100,6 @@ def parse_post(driver, url, parsed_posts):
         get_post_info(driver, parsed_post)
         if get_user_info(driver, parsed_post):
             parsed_posts.append(parsed_post)
-            print(len(parsed_posts), parsed_post)
     return parsed_posts
 
 
@@ -109,7 +108,6 @@ def parse(driver, parsed_posts, count):
     index = 0
     while len(parsed_posts) < count:
         links = driver.find_elements_by_css_selector(CONSTANTS['POST_LINK_CSS_SELECTOR'])
-        print(len(links))
         links = links[index:len(links)]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         for link in links:
@@ -159,6 +157,6 @@ if __name__ == '__main__':
     parsed_posts = []
     init_logger()
     with open_webdriver() as driver:
-        parse(driver, parsed_posts, 4)
+        parse(driver, parsed_posts, 100)
         save(parsed_posts)
     logging.info(f'The duration of the scraping: {datetime.now() - start}')
