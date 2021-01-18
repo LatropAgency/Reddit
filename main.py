@@ -3,7 +3,6 @@ import argparse
 import sys
 from contextlib import contextmanager
 from logging import handlers
-from logging import config
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
@@ -31,6 +30,13 @@ CSS_SELECTORS = {
     'USER': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
     'USER_CARD': 'div._m7PpFuKATP9fZF4xKf9R',
     'CARD_KARMA': 'div._18aX_pAQub_mu1suz4-i8j',
+}
+
+LOGMODES = {
+    'ALL': (logging.DEBUG, logging.INFO, logging.ERROR, logging.WARNING, logging.CRITICAL, logging.NOTSET),
+    'ERROR': (logging.ERROR,),
+    'WARNING': (logging.WARNING,),
+    'DISABLE': (),
 }
 
 
@@ -98,13 +104,6 @@ class StdoutFilter(logging.Filter):
 
 
 def init_logger(logmode):
-    logmodes = {
-        'ALL': (logging.DEBUG, logging.INFO, logging.ERROR, logging.WARNING, logging.CRITICAL, logging.NOTSET),
-        'ERROR': (logging.ERROR,),
-        'WARNING': (logging.WARNING,),
-        'DISABLE': (),
-    }
-
     format = '%(asctime)s - %(levelname)s - %(message)s'
     log = logging.getLogger()
     log.setLevel(logging.DEBUG)
@@ -112,7 +111,7 @@ def init_logger(logmode):
     format = logging.Formatter(format)
 
     ch = logging.StreamHandler(sys.stdout)
-    ch.addFilter(StdoutFilter(logmodes[logmode]))
+    ch.addFilter(StdoutFilter(LOGMODES[logmode]))
     ch.setFormatter(format)
     log.addHandler(ch)
 
