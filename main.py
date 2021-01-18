@@ -1,8 +1,9 @@
 import logging
+import argparse
 from contextlib import contextmanager
 
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -11,21 +12,22 @@ from selenium.webdriver.chrome.options import Options
 
 import uuid
 
-import calendar
+import dateparser
+
 from datetime import datetime
 
-CONSTANTS = {
-    'VOTE_COUNT_CSS_SELECTOR': '._1rZYMD_4xY3gRcSS3p8ODO',
-    'COMMENT_COUNT_CSS_SELECTOR': 'span.FHCV02u6Cp2zYL0fhQPsO',
-    'CAKE_DAY_CSS_SELECTOR': 'span#profile--id-card--highlight-tooltip--cakeday',
-    'USER_KARMA_CSS_SELECTOR': 'span#profile--id-card--highlight-tooltip--karma',
-    'CATEGORY_CSS_SELECTOR': 'span._19bCWnxeTjqzBElWZfIlJb',
-    'POST_DATE_CSS_SELECTOR': 'div._2J_zB4R1FH2EjGMkQjedwc',
-    'POST_HOVER_DATE_CSS_SELECTOR': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
-    'POST_LINK_CSS_SELECTOR': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
-    'USER_CSS_SELECTOR': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
-    'USER_CARD_CSS_SELECTOR': 'div._m7PpFuKATP9fZF4xKf9R',
-    'CARD_KARMA_CSS_SELECTOR': 'div._18aX_pAQub_mu1suz4-i8j',
+CSS_SELECTORS = {
+    'VOTE_COUNT': '._1rZYMD_4xY3gRcSS3p8ODO',
+    'COMMENT_COUNT': 'span.FHCV02u6Cp2zYL0fhQPsO',
+    'CAKE_DAY': 'span#profile--id-card--highlight-tooltip--cakeday',
+    'USER_KARMA': 'span#profile--id-card--highlight-tooltip--karma',
+    'CATEGORY': 'span._19bCWnxeTjqzBElWZfIlJb',
+    'POST_DATE': 'div._2J_zB4R1FH2EjGMkQjedwc',
+    'POST_HOVER_DATE': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
+    'POST_LINK': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
+    'USER': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
+    'USER_CARD': 'div._m7PpFuKATP9fZF4xKf9R',
+    'CARD_KARMA': 'div._18aX_pAQub_mu1suz4-i8j',
 }
 
 
@@ -39,6 +41,22 @@ def show_element(driver, css_selector):
     element = driver.find_element_by_css_selector(css_selector)
     ActionChains(driver).move_to_element(element).perform()
     return element
+
+
+def post_count_validator(arg):
+    try:
+        i = int(arg)
+    except ValueError:
+        raise argparse.ArgumentTypeError("The argument must be an integer")
+    if i < 0:
+        raise argparse.ArgumentTypeError(f"The argument must be > {0}")
+    return i
+
+
+def logmode_validator(arg):
+    if arg in ['w', 'a']:
+        return arg
+    raise argparse.ArgumentTypeError("Unknown mode")
 
 
 @contextmanager
@@ -67,11 +85,12 @@ def open_tab(driver, url):
         driver.switch_to.window(parent_handler)
 
 
-def init_logger():
+def init_logger(logmode):
     format = '%(asctime)s - %(levelname)s - %(message)s'
     logging.basicConfig(filename='app.log',
                         format=format,
-                        level=logging.DEBUG)
+                        level=logging.DEBUG,
+                        filemode=logmode)
 
 
 def init_driver():
@@ -110,7 +129,7 @@ def parse(driver, parsed_posts, count):
     driver.get('https://www.reddit.com/top/?t=month')
     index = 0
     while len(parsed_posts) < count:
-        links = driver.find_elements_by_css_selector(CONSTANTS['POST_LINK_CSS_SELECTOR'])
+        links = driver.find_elements_by_css_selector(CSS_SELECTORS['POST_LINK'])
         links = links[index:len(links)]
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         for link in links:
@@ -122,35 +141,30 @@ def parse(driver, parsed_posts, count):
 
 
 def get_post_date(driver):
-    show_element(driver, CONSTANTS['POST_HOVER_DATE_CSS_SELECTOR'])
-    post_date = get_element_text(driver, CONSTANTS['POST_DATE_CSS_SELECTOR']).split(' ')[1:4]
-    post_date[0] = str(
-        dict((month, index) for index, month in enumerate(calendar.month_abbr) if month)[post_date[0]])
-    if len(post_date[0]) == 1:
-        post_date[0] = f'0{post_date[0]}'
-    return f'{post_date[2]}-{post_date[0]}-{post_date[1]}'
+    post_date = get_element_text(driver, CSS_SELECTORS['POST_HOVER_DATE'])
+    return dateparser.parse(post_date).strftime("%Y-%m-%d")
 
 
 def get_post_info(driver, parsed_post):
     parsed_post['post_date'] = get_post_date(driver)
-    parsed_post['comment_count'] = get_element_text(driver, CONSTANTS['COMMENT_COUNT_CSS_SELECTOR']).split(' ')[0]
-    parsed_post['vote_count'] = get_element_text(driver, CONSTANTS['VOTE_COUNT_CSS_SELECTOR'])
-    parsed_post['category'] = get_element_text(driver, CONSTANTS['CATEGORY_CSS_SELECTOR']).split('/')[1]
+    parsed_post['comment_count'] = get_element_text(driver, CSS_SELECTORS['COMMENT_COUNT']).split(' ')[0]
+    parsed_post['vote_count'] = get_element_text(driver, CSS_SELECTORS['VOTE_COUNT'])
+    parsed_post['category'] = get_element_text(driver, CSS_SELECTORS['CATEGORY']).split('/')[1]
 
 
 def get_user_info(driver, parsed_post):
     wait = WebDriverWait(driver, 10)
-    parsed_post['username'] = get_element_text(driver, CONSTANTS['USER_CSS_SELECTOR']).split('/')[1]
-    user_element = show_element(driver, CONSTANTS['USER_CSS_SELECTOR'])
-    wait.until(ec.presence_of_element_located((By.CSS_SELECTOR, CONSTANTS['USER_CARD_CSS_SELECTOR'])))
-    card_element = driver.find_elements_by_css_selector(CONSTANTS['CARD_KARMA_CSS_SELECTOR'])
+    parsed_post['username'] = get_element_text(driver, CSS_SELECTORS['USER']).split('/')[1]
+    user_element = show_element(driver, CSS_SELECTORS['USER'])
+    wait.until(ec.presence_of_element_located((By.CSS_SELECTOR, CSS_SELECTORS['USER_CARD'])))
+    card_element = driver.find_elements_by_css_selector(CSS_SELECTORS['CARD_KARMA'])
     parsed_post['post_karma'] = card_element[0].get_attribute('innerHTML')
     parsed_post['comment_karma'] = card_element[1].get_attribute('innerHTML')
     user_element.click()
     try:
         logging.info(f'User: {parsed_post["username"]} is valid')
-        parsed_post['user_karma'] = get_element_text(driver, CONSTANTS['USER_KARMA_CSS_SELECTOR'])
-        parsed_post['cake_day'] = get_element_text(driver, CONSTANTS['CAKE_DAY_CSS_SELECTOR'])
+        parsed_post['user_karma'] = get_element_text(driver, CSS_SELECTORS['USER_KARMA'])
+        parsed_post['cake_day'] = get_element_text(driver, CSS_SELECTORS['CAKE_DAY'])
         return True
     except TimeoutException:
         logging.info(f'User: {parsed_post["username"]} is not valid')
@@ -159,9 +173,17 @@ def get_user_info(driver, parsed_post):
 
 if __name__ == '__main__':
     start = datetime.now()
+    parser = argparse.ArgumentParser(description='Reddit parser')
+    parser.add_argument('--count', required=False, default=100, type=post_count_validator,
+                        help='Count of post to parse')
+    parser.add_argument('--logmode', required=False, default='a', type=logmode_validator, help='Log mode')
+    args = parser.parse_args()
     parsed_posts = []
-    init_logger()
-    with open_webdriver() as driver:
-        parse(driver, parsed_posts, 4)
-        save(parsed_posts)
-    logging.debug(f'The duration of the scraping: {datetime.now() - start}')
+    init_logger(args.logmode)
+    try:
+        with open_webdriver() as driver:
+            parse(driver, parsed_posts, args.count)
+            save(parsed_posts)
+            logging.debug(f'The duration of the scraping: {datetime.now() - start}')
+    except WebDriverException as e:
+        logging.error(e)
