@@ -1,8 +1,6 @@
 import logging
 from contextlib import contextmanager
 
-from bs4 import BeautifulSoup
-
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
@@ -56,7 +54,7 @@ def open_webdriver():
 def open_tab(driver, url):
     parent_handler = driver.window_handles[0]
     driver.execute_script("window.open('');")
-    logging.info('New tab is opened')
+    logging.info(f'New tab is opened with url: {url}')
     all_handlers = driver.window_handles
     new_handler = [x for x in all_handlers if x != parent_handler][0]
     driver.switch_to.window(new_handler)
@@ -70,7 +68,10 @@ def open_tab(driver, url):
 
 
 def init_logger():
-    logging.basicConfig(filename='app.log', format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+    format = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(filename='app.log',
+                        format=format,
+                        level=logging.DEBUG)
 
 
 def init_driver():
@@ -82,17 +83,18 @@ def init_driver():
     options.add_argument("--disable-extensions")
     options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
-    logging.info('WebDriver is initialized')
+    logging.debug('WebDriver is initialized')
     return driver
 
 
 def save(parsed_posts):
     with open(f'{datetime.today().strftime("reddit-%Y%m%d%H%M")}.txt', "w") as file:
         file.writelines([';'.join(parsed_post.values()) + '\n' for parsed_post in parsed_posts])
-    logging.info('Successful saving')
+        logging.info(f'Successful saved to {file.name}')
 
 
 def parse_post(driver, url, parsed_posts):
+    logging.info(f'Url of post: {url}')
     parsed_post = {}
     parsed_post['unique_id'] = str(uuid.uuid1())
     parsed_post['url'] = url
@@ -100,10 +102,11 @@ def parse_post(driver, url, parsed_posts):
         get_post_info(driver, parsed_post)
         if get_user_info(driver, parsed_post):
             parsed_posts.append(parsed_post)
-    return parsed_posts
+            logging.info(f'Successfully parse: {len(parsed_posts)}')
 
 
 def parse(driver, parsed_posts, count):
+    logging.info(f'Parse is starting with count: {count}')
     driver.get('https://www.reddit.com/top/?t=month')
     index = 0
     while len(parsed_posts) < count:
@@ -145,10 +148,12 @@ def get_user_info(driver, parsed_post):
     parsed_post['comment_karma'] = card_element[1].get_attribute('innerHTML')
     user_element.click()
     try:
+        logging.info(f'User: {parsed_post["username"]} is valid')
         parsed_post['user_karma'] = get_element_text(driver, CONSTANTS['USER_KARMA_CSS_SELECTOR'])
         parsed_post['cake_day'] = get_element_text(driver, CONSTANTS['CAKE_DAY_CSS_SELECTOR'])
         return True
     except TimeoutException:
+        logging.info(f'User: {parsed_post["username"]} is not valid')
         return False
 
 
@@ -157,6 +162,6 @@ if __name__ == '__main__':
     parsed_posts = []
     init_logger()
     with open_webdriver() as driver:
-        parse(driver, parsed_posts, 100)
+        parse(driver, parsed_posts, 4)
         save(parsed_posts)
-    logging.info(f'The duration of the scraping: {datetime.now() - start}')
+    logging.debug(f'The duration of the scraping: {datetime.now() - start}')
