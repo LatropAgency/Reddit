@@ -143,7 +143,7 @@ def init_driver():
 
 
 def save(parsed_post):
-    requests.post('http://localhost:8087/posts/', json=parsed_post)
+    requests.post(f'http://{HOSTNAME}:{PORT}/posts/', json=parsed_post)
 
 
 def parse_post(post, post_link, user_link, parsed_posts):
