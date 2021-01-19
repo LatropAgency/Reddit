@@ -27,7 +27,7 @@ class Server(BaseHTTPRequestHandler):
 
     def _get_all_posts(self):
         with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', 'r') as f:
-            posts = [line.split(';') for line in f.read().split('\n')]
+            posts = [line.split(';') for line in f.read().split('\n') if line != '']
         return {post[0]: dict(zip(KEYS, post)) for post in posts}
 
     def _get_post(self, unique_id):
@@ -40,7 +40,7 @@ class Server(BaseHTTPRequestHandler):
 
     def _append(self, post):
         with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', 'a+') as f:
-            f.write('\n' + ';'.join(post.values()))
+            f.write(';'.join(post.values()) + '\n')
 
     def do_GET(self):
         if (self.path == '/posts/'):
@@ -63,6 +63,7 @@ class Server(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length'))
             body = self.rfile.read(length).decode('utf-8')
             post = json.loads(body)
+            print(post)
             self._append(post)
             self._set_headers(201)
             self.wfile.write(bytes(json.dumps(post), 'utf-8'))
@@ -92,7 +93,6 @@ class Server(BaseHTTPRequestHandler):
             self._save(posts)
         else:
             self._set_headers(404)
-
 
 
 if __name__ == "__main__":
