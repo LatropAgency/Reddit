@@ -1,11 +1,12 @@
 import logging
-import argparse
-import sys
-import time
-from contextlib import contextmanager
 from logging import handlers
 
-import bs4
+import argparse
+
+import sys
+
+from contextlib import contextmanager
+
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
@@ -19,6 +20,10 @@ import uuid
 import dateparser
 
 from datetime import datetime
+
+import requests
+
+from server import HOSTNAME, PORT
 
 CSS_SELECTORS = {
     'POST': 'div.Post',
@@ -137,10 +142,8 @@ def init_driver():
     return driver
 
 
-def save(parsed_posts):
-    with open(f'{datetime.today().strftime("reddit-%Y%m%d%H%M")}.txt', "w") as file:
-        file.writelines([';'.join(parsed_post.values()) + '\n' for parsed_post in parsed_posts])
-        logging.info(f'Successful saved to {file.name}')
+def save(parsed_post):
+    requests.post('http://localhost:8087/posts/', json=parsed_post)
 
 
 def parse_post(post, post_link, user_link, parsed_posts):
@@ -150,6 +153,7 @@ def parse_post(post, post_link, user_link, parsed_posts):
     if get_user_info(driver, parsed_post, user_link):
         parsed_posts.append(parsed_post)
         get_post_info(post, parsed_post)
+        save(parsed_post)
         logging.info(f'Successfully parse: {len(parsed_posts)}')
 
 
@@ -204,17 +208,18 @@ def get_user_info(driver, parsed_post, user_url):
 
 if __name__ == '__main__':
     start = datetime.now()
+
     parser = argparse.ArgumentParser(description='Reddit parser')
     parser.add_argument('--count', required=False, default=100, type=post_count_validator,
                         help='Count of post to parse')
     parser.add_argument('--logmode', required=False, default='ALL', type=logmode_validator,
                         help='Log mode  - ALL - all levers, ERROR - only ERROR lever, WARNING - only WARNING lever, DISABLE - no console console log')
     args = parser.parse_args()
+
     init_logger(args.logmode)
     try:
         with open_webdriver() as driver:
             parsed_posts = lookup(driver, args.count)
-            save(parsed_posts)
             logging.debug(f'The duration of the scraping: {datetime.now() - start}')
     except WebDriverException as e:
         logging.error(e)
