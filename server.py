@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
 import os
+from threading import Thread, Timer
 
 from validators import unsigned_int_validator
 
@@ -22,10 +23,19 @@ KEYS = ['unique_id',
         ]
 
 
+class http_server:
+    def __init__(self, hostname, port, storage):
+        HttpHandler.storage = storage
+        server = HTTPServer((hostname, port), HttpHandler)
+        server.serve_forever()
+
+
 class Storage:
-    def __init__(self, keys):
+    def __init__(self, keys, cooldown):
         self.keys = keys
         self.items = self.get_all()
+        self.cooldown = cooldown
+        self.save()
 
     def get_all(self):
         filename = f'{datetime.today().strftime("reddit-%Y%m%d")}.txt'
@@ -36,11 +46,16 @@ class Storage:
             items = [line.split(';') for line in f.read().split('\n') if line != '']
         return {item[0]: dict(zip(self.keys, item)) for item in items}
 
+    def save(self):
+        with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', "w") as file:
+            file.writelines([';'.join(item.values()) + '\n' for item in self.items.values()])
+        Timer(self.cooldown, self.save).start()
+
     def get_by_id(self, id):
         return self.items.get(id, None)
 
-    def insert(self, item):
-        self.items[item['unique_id']] = item
+    def insert(self, item, id):
+        self.items[id] = item
 
     def delete(self, id):
         del self.items[id]
@@ -51,8 +66,10 @@ class Storage:
 
 
 class HttpHandler(BaseHTTPRequestHandler):
+    storage = None
+
     def __init__(self, *args, **kwargs):
-        self.storage = Storage(KEYS)
+        self.storage = self.__class__.storage
         super(BaseHTTPRequestHandler, self).__init__(*args, **kwargs)
 
     def _set_headers(self, status_code):
@@ -82,7 +99,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length'))
             body = self.rfile.read(length).decode('utf-8')
             post = json.loads(body)
-            self.storage.insert(post)
+            self.storage.insert(post, post['unique_id'])
             self._set_headers(201)
             self.wfile.write(
                 bytes(json.dumps({post['unique_id']: list(self.storage.items.keys()).index(post['unique_id'])}),
@@ -114,15 +131,7 @@ class HttpHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Reddit parser')
     parser.add_argument('port', type=unsigned_int_validator, help='Port of HTTP server')
+    parser.add_argument('--cooldown', required=False, default=10, type=unsigned_int_validator, help='Autosave cooldown')
     args = parser.parse_args()
 
-    webServer = HTTPServer((HOSTNAME, args.port), HttpHandler)
-    print("Server started http://%s:%s" % (HOSTNAME, args.port))
-
-    try:
-        webServer.serve_forever()
-    except KeyboardInterrupt:
-        pass
-
-    webServer.server_close()
-    print("Server stopped.")
+    http_server(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
