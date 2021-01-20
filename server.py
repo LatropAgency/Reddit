@@ -23,7 +23,7 @@ KEYS = ['unique_id',
         ]
 
 
-class http_server:
+class HttpServer:
     def __init__(self, hostname, port, storage):
         HttpHandler.storage = storage
         server = HTTPServer((hostname, port), HttpHandler)
@@ -164,4 +164,4 @@ if __name__ == "__main__":
     parser.add_argument('--cooldown', required=False, default=10, type=unsigned_int_validator, help='Autosave cooldown')
     args = parser.parse_args()
 
-    http_server(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
+    HttpServer(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
