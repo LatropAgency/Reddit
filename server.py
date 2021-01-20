@@ -4,7 +4,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
 import os
-from threading import Thread, Timer
+from threading import Timer
 
 from validators import unsigned_int_validator
 
@@ -100,10 +100,13 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.set_headers(200)
         self.wfile.write(bytes(json.dumps(list(self.storage.items.values())), 'utf-8'))
 
-    def insert_post(self):
+    def get_post_from_body(self):
         length = int(self.headers.get('Content-Length'))
         body = self.rfile.read(length).decode('utf-8')
-        post = json.loads(body)
+        return json.loads(body)
+
+    def insert_post(self):
+        post = self.get_post_from_body()
         self.storage.insert(post, post['unique_id'])
         self.set_headers(201)
         self.wfile.write(
@@ -112,28 +115,29 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def delete_post(self):
         unique_id = self.path.split('/')[2]
-        if unique_id in self.storage.items.keys():
+        if unique_id not in self.storage.items.keys():
+            self.set_headers(404)
+        else:
             self.set_headers(200)
             self.storage.delete(unique_id)
-        else:
-            self.set_headers(404)
 
     def get_post(self):
         unique_id = self.path.split('/')[2]
         post = self.storage.get_by_id(unique_id)
-        if post:
+        if not post:
+            self.set_headers(404)
+        else:
             self.set_headers(200)
             self.wfile.write(bytes(json.dumps(post), 'utf-8'))
-        else:
-            self.set_headers(404)
 
     def update_post(self):
         unique_id = self.path.split('/')[2]
-        length = int(self.headers.get('Content-Length'))
-        body = self.rfile.read(length).decode('utf-8')
-        post = json.loads(body)
-        self.storage.update(unique_id, post)
-        self.set_headers(200)
+        if not self.storage.get_by_id(unique_id):
+            self.set_headers(404)
+        else:
+            post = self.get_post_from_body()
+            self.storage.update(unique_id, post)
+            self.set_headers(200)
 
     def find_route(self, method):
         for route in self.router[method].keys():
