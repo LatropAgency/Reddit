@@ -23,7 +23,10 @@ from datetime import datetime
 
 import requests
 
-from server import HOSTNAME, PORT
+from server import HOSTNAME
+from validators import unsigned_int_validator, logmode_validator
+
+PORT = 8087
 
 CSS_SELECTORS = {
     'POST': 'div.Post',
@@ -60,22 +63,6 @@ def show_element(driver, css_selector):
     ActionChains(driver).move_to_element(element).perform()
 
 
-def post_count_validator(arg):
-    try:
-        i = int(arg)
-    except ValueError:
-        raise argparse.ArgumentTypeError("The argument must be an integer")
-    if i < 0:
-        raise argparse.ArgumentTypeError(f"The argument must be > {0}")
-    return i
-
-
-def logmode_validator(arg):
-    if arg in ['ALL', 'ERROR', 'WARNING', 'DISABLE']:
-        return arg
-    raise argparse.ArgumentTypeError("Unknown mode")
-
-
 @contextmanager
 def open_webdriver():
     driver = init_driver()
@@ -103,7 +90,6 @@ def open_tab(driver, url):
 
 
 class StdoutFilter(logging.Filter):
-
     def __init__(self, logmode):
         self.logmode = logmode
 
@@ -111,7 +97,7 @@ class StdoutFilter(logging.Filter):
         return record.levelno in self.logmode
 
 
-def init_logger(logmode):
+def configurate_logger(logmode):
     format = '%(asctime)s - %(levelname)s - %(message)s'
     log = logging.getLogger()
     log.setLevel(logging.DEBUG)
@@ -176,7 +162,6 @@ def lookup(driver, count):
             index += 1
             if (len(parsed_posts)) == count:
                 break
-    return parsed_posts
 
 
 def get_post_date(driver):
@@ -210,16 +195,26 @@ if __name__ == '__main__':
     start = datetime.now()
 
     parser = argparse.ArgumentParser(description='Reddit parser')
-    parser.add_argument('--count', required=False, default=100, type=post_count_validator,
+    parser.add_argument('--count',
+                        required=False,
+                        default=100,
+                        type=unsigned_int_validator,
                         help='Count of post to parse')
-    parser.add_argument('--logmode', required=False, default='ALL', type=logmode_validator,
-                        help='Log mode  - ALL - all levers, ERROR - only ERROR lever, WARNING - only WARNING lever, DISABLE - no console console log')
+    parser.add_argument('--logmode',
+                        required=False,
+                        default='ALL',
+                        type=logmode_validator,
+                        help="""Log mode  
+                                - ALL - all levers, 
+                                ERROR - only ERROR lever, 
+                                WARNING - only WARNING lever, 
+                                DISABLE - no console console log""")
     args = parser.parse_args()
 
-    init_logger(args.logmode)
+    configurate_logger(args.logmode)
     try:
         with open_webdriver() as driver:
-            parsed_posts = lookup(driver, args.count)
+            lookup(driver, args.count)
             logging.debug(f'The duration of the scraping: {datetime.now() - start}')
     except WebDriverException as e:
         logging.error(e)
