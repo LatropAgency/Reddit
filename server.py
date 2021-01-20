@@ -3,6 +3,7 @@ import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
+import os
 
 from validators import unsigned_int_validator
 
@@ -27,7 +28,11 @@ class Storage:
         self.items = self.get_all()
 
     def get_all(self):
-        with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', 'r') as f:
+        filename = f'{datetime.today().strftime("reddit-%Y%m%d")}.txt'
+        if not os.path.exists(filename):
+            with open(filename, 'w'):
+                pass
+        with open(filename, 'r') as f:
             items = [line.split(';') for line in f.read().split('\n') if line != '']
         return {item[0]: dict(zip(self.keys, item)) for item in items}
 
