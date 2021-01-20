@@ -160,8 +160,8 @@ class HttpHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Reddit parser')
-    parser.add_argument('port', type=unsigned_int_validator, help='Port of HTTP server')
-    parser.add_argument('--cooldown', required=False, default=10, type=unsigned_int_validator, help='Autosave cooldown')
+    parser.add_argument('-p', '--port', required=False, default=8087, type=unsigned_int_validator, help='Port of HTTP server')
+    parser.add_argument('-c', '--cooldown', required=False, default=10, type=unsigned_int_validator, help='Autosave cooldown')
     args = parser.parse_args()
 
     HttpServer(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
