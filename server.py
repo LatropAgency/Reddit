@@ -1,12 +1,14 @@
 import argparse
 import json
+import logging
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
-import os
+from main import configurate_logger
 from threading import Timer
 
-from validators import unsigned_int_validator
+from validators import logmode_validator, unsigned_int_validator
 
 HOSTNAME = 'localhost'
 KEYS = ['unique_id',
@@ -39,10 +41,8 @@ class Storage:
 
     def get_all(self):
         filename = f'{datetime.today().strftime("reddit-%Y%m%d")}.txt'
-        if not os.path.exists(filename):
-            with open(filename, 'w'):
-                pass
-        with open(filename, 'r') as f:
+        mode = 'r' if os.path.exists(filename) else 'w+'
+        with open(filename, mode) as f:
             items = [line.split(';') for line in f.read().split('\n') if line != '']
         return {item[0]: dict(zip(self.keys, item)) for item in items}
 
@@ -85,7 +85,6 @@ class HttpHandler(BaseHTTPRequestHandler):
             },
             'DEFAULT': self.default_route,
         }
-        self.storage = self.__class__.storage
         super(BaseHTTPRequestHandler, self).__init__(*args, **kwargs)
 
     def set_headers(self, status_code):
@@ -93,12 +92,16 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "application/json")
         self.end_headers()
 
+    def unknown_resourse(self, unique_id):
+        logging.debug(f'Unknown resource with UNIQUE_ID: {unique_id}')
+        self.set_headers(404)
+
     def default_route(self):
         self.set_headers(200)
 
     def get_all_posts(self):
         self.set_headers(200)
-        self.wfile.write(bytes(json.dumps(list(self.storage.items.values())), 'utf-8'))
+        self.wfile.write(bytes(json.dumps(list(HttpHandler.storage.items.values())), 'utf-8'))
 
     def get_post_from_body(self):
         length = int(self.headers.get('Content-Length'))
@@ -107,36 +110,38 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def insert_post(self):
         post = self.get_post_from_body()
-        self.storage.insert(post, post['unique_id'])
+        HttpHandler.storage.insert(post, post['unique_id'])
         self.set_headers(201)
         self.wfile.write(
-            bytes(json.dumps({post['unique_id']: list(self.storage.items.keys()).index(post['unique_id'])}),
+            bytes(json.dumps({post['unique_id']: list(HttpHandler.storage.items.keys()).index(post['unique_id'])}),
                   'utf-8'))
 
     def delete_post(self):
         unique_id = self.path.split('/')[2]
-        if unique_id not in self.storage.items.keys():
-            self.set_headers(404)
+        if unique_id not in HttpHandler.storage.items.keys():
+            self.unknown_resourse(unique_id)
         else:
             self.set_headers(200)
-            self.storage.delete(unique_id)
+            logging.debug(f'Post with UNIQUE_ID: {unique_id} is deleted')
+            HttpHandler.storage.delete(unique_id)
 
     def get_post(self):
         unique_id = self.path.split('/')[2]
-        post = self.storage.get_by_id(unique_id)
+        post = HttpHandler.storage.get_by_id(unique_id)
         if not post:
-            self.set_headers(404)
+            self.unknown_resourse(unique_id)
         else:
             self.set_headers(200)
             self.wfile.write(bytes(json.dumps(post), 'utf-8'))
 
     def update_post(self):
         unique_id = self.path.split('/')[2]
-        if not self.storage.get_by_id(unique_id):
-            self.set_headers(404)
+        if not HttpHandler.storage.get_by_id(unique_id):
+            self.unknown_resourse(unique_id)
         else:
+            logging.debug(f'Updated post with UNIQUE_ID: {unique_id}')
             post = self.get_post_from_body()
-            self.storage.update(unique_id, post)
+            HttpHandler.storage.update(unique_id, post)
             self.set_headers(200)
 
     def find_route(self, method):
@@ -160,8 +165,23 @@ class HttpHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Reddit parser')
-    parser.add_argument('-p', '--port', required=False, default=8087, type=unsigned_int_validator, help='Port of HTTP server')
-    parser.add_argument('-c', '--cooldown', required=False, default=10, type=unsigned_int_validator, help='Autosave cooldown')
+    parser.add_argument('-p', '--port', required=False, default=8087, type=unsigned_int_validator,
+                        help='Port of HTTP server')
+    parser.add_argument('-c', '--cooldown', required=False, default=10, type=unsigned_int_validator,
+                        help='Autosave cooldown')
+    parser.add_argument('--logmode',
+                        required=False,
+                        default='ALL',
+                        type=logmode_validator,
+                        help="""Log mode  
+                                - ALL - all levers, 
+                                ERROR - only ERROR lever, 
+                                WARNING - only WARNING lever, 
+                                DISABLE - no console console log""")
     args = parser.parse_args()
 
+    configurate_logger(args.logmode)
+    logging.debug(f'Server started http://{HOSTNAME}:{args.port}')
+
     HttpServer(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
+    logging.debug(f'Server is stopped')

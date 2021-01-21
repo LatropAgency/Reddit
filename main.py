@@ -1,9 +1,8 @@
 import logging
-from logging import handlers
+
+from logger_conf import LOGMODES, configurate_logger
 
 import argparse
-
-import sys
 
 from contextlib import contextmanager
 
@@ -44,12 +43,7 @@ CSS_SELECTORS = {
     'USERNAME': 'h1._3LM4tRaExed4x1wBfK1pmg',
 }
 
-LOGMODES = {
-    'ALL': (logging.DEBUG, logging.INFO, logging.ERROR, logging.WARNING, logging.CRITICAL, logging.NOTSET),
-    'ERROR': (logging.ERROR,),
-    'WARNING': (logging.WARNING,),
-    'DISABLE': (),
-}
+
 
 
 def get_element_text(driver, css_selector):
@@ -87,32 +81,6 @@ def open_tab(driver, url):
         driver.close()
         logging.info('Tab is closed')
         driver.switch_to.window(parent_handler)
-
-
-class StdoutFilter(logging.Filter):
-    def __init__(self, logmode):
-        self.logmode = logmode
-
-    def filter(self, record):
-        return record.levelno in self.logmode
-
-
-def configurate_logger(logmode):
-    format = '%(asctime)s - %(levelname)s - %(message)s'
-    log = logging.getLogger()
-    log.setLevel(logging.DEBUG)
-
-    format = logging.Formatter(format)
-
-    ch = logging.StreamHandler(sys.stdout)
-    ch.addFilter(StdoutFilter(LOGMODES[logmode]))
-    ch.setFormatter(format)
-    log.addHandler(ch)
-
-    fh = handlers.RotatingFileHandler('app.log')
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(format)
-    log.addHandler(fh)
 
 
 def init_driver():
