@@ -1,6 +1,9 @@
 import logging
+import time
 
-from logger_conf import LOGMODES, configurate_logger
+from bs4 import BeautifulSoup
+
+from logger_conf import configurate_logger
 
 import argparse
 
@@ -32,14 +35,14 @@ CSS_SELECTORS = {
     'VOTE_COUNT': '._1rZYMD_4xY3gRcSS3p8ODO',
     'COMMENT_COUNT': 'span.FHCV02u6Cp2zYL0fhQPsO',
     'CAKE_DAY': 'span#profile--id-card--highlight-tooltip--cakeday',
-    'USER_KARMA': 'span#profile--id-card--highlight-tooltip--karma',
+    'USER_KARMA': 'span._1hNyZSklmcC7R_IfCUcXmZ',
     'CATEGORY': 'div._2mHuuvyV9doV3zwbZPtIPG > a._3ryJoIoycVkA88fy40qNJc',
     'POST_DATE': 'div._2J_zB4R1FH2EjGMkQjedwc',
     'POST_HOVER_DATE': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
     'POST_LINK': 'a._3jOxDPIQ0KaOWpzvSQo-1s',
     'USER': 'a._2tbHP6ZydRpjI44J3syuqC._23wugcdiaj44hdfugIAlnX.oQctV4n0yUb0uiHDdGnmE',
-    'USER_CARD': 'div._3uK2I0hi3JFTKnMUFHD2Pd',
-    'CARD_KARMA': 'div._18aX_pAQub_mu1suz4-i8j',
+    'USER_CARD': 'div._m7PpFuKATP9fZF4xKf9R',
+    'CARD_KARMA': '_18aX_pAQub_mu1suz4-i8j',
     'USERNAME': 'h1._3LM4tRaExed4x1wBfK1pmg',
 }
 
@@ -90,7 +93,7 @@ def init_driver():
     options.add_argument("start-maximized")
     options.add_argument("disable-infobars")
     options.add_argument("--disable-extensions")
-    # options.add_argument("--headless")
+    options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
     logging.debug('WebDriver is initialized')
     return driver
@@ -106,7 +109,7 @@ def parse_post(post, post_link, user_link, parsed_posts):
     parsed_post['url'] = post_link
     if get_user_info(driver, parsed_post, user_link):
         parsed_posts.append(parsed_post)
-        get_post_info(post, parsed_post)
+        get_post_info(driver, post, parsed_post)
         save(parsed_post)
         logging.info(f'Successfully parse: {len(parsed_posts)}')
 
@@ -137,7 +140,15 @@ def get_post_date(driver):
     return dateparser.parse(post_date).strftime("%Y-%m-%d")
 
 
-def get_post_info(post, parsed_post):
+def get_post_info(driver, post, parsed_post):
+    with open_tab(driver, parsed_post['url']):
+        show_element(driver, CSS_SELECTORS['USER'])
+        WebDriverWait(driver, 10).until(ec.visibility_of_element_located((By.CSS_SELECTOR, CSS_SELECTORS['USER_CARD'])))
+        html = driver.page_source
+        soup = BeautifulSoup(html)
+        post_karma, comment_karma = (elem.text for elem in soup.find_all(class_=CSS_SELECTORS['CARD_KARMA']))
+        parsed_post['post_karma'] = post_karma
+        parsed_post['comment_karma'] = comment_karma
     parsed_post['post_date'] = get_post_date(post)
     parsed_post['comment_count'] = get_element_text(post, CSS_SELECTORS['COMMENT_COUNT']).split(' ')[0]
     parsed_post['vote_count'] = get_element_text(post, CSS_SELECTORS['VOTE_COUNT'])
@@ -150,10 +161,6 @@ def get_user_info(driver, parsed_post, user_url):
             parsed_post['username'] = user_url.split('/')[-2]
             parsed_post['user_karma'] = get_element_text(driver, CSS_SELECTORS['USER_KARMA'])
             parsed_post['cake_day'] = get_element_text(driver, CSS_SELECTORS['CAKE_DAY'])
-            show_element(driver, CSS_SELECTORS['USER_KARMA'])
-            karma = get_element_text(driver, CSS_SELECTORS['USER_CARD']).split('\n')
-            parsed_post['post_karma'] = karma[0].split(' ')[0]
-            parsed_post['comment_karma'] = karma[1].split(' ')[0]
             return True
         except TimeoutException:
             return False
@@ -180,9 +187,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     configurate_logger(args.logmode)
-    try:
-        with open_webdriver() as driver:
-            lookup(driver, args.count)
-            logging.debug(f'The duration of the scraping: {datetime.now() - start}')
-    except WebDriverException as e:
-        logging.error(e)
+    with open_webdriver() as driver:
+        lookup(driver, args.count)
+        logging.debug(f'The duration of the scraping: {datetime.now() - start}')

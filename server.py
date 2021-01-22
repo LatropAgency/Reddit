@@ -2,10 +2,11 @@ import argparse
 import json
 import logging
 import os
+import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
-from main import configurate_logger
+from logger_conf import configurate_logger
 from threading import Timer
 
 from validators import logmode_validator, unsigned_int_validator
@@ -25,13 +26,6 @@ KEYS = ['unique_id',
         ]
 
 
-class HttpServer:
-    def __init__(self, hostname, port, storage):
-        HttpHandler.storage = storage
-        server = HTTPServer((hostname, port), HttpHandler)
-        server.serve_forever()
-
-
 class Storage:
     def __init__(self, keys, cooldown):
         self.keys = keys
@@ -47,6 +41,11 @@ class Storage:
         return {item[0]: dict(zip(self.keys, item)) for item in items}
 
     def save(self):
+        for i in threading.enumerate():
+            if i.name == "MainThread":
+                break
+        else:
+            return
         with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', "w") as file:
             file.writelines([';'.join(item.values()) + '\n' for item in self.items.values()])
         Timer(self.cooldown, self.save).start()
@@ -183,5 +182,11 @@ if __name__ == "__main__":
     configurate_logger(args.logmode)
     logging.debug(f'Server started http://{HOSTNAME}:{args.port}')
 
-    HttpServer(HOSTNAME, args.port, Storage(KEYS, args.cooldown))
-    logging.debug(f'Server is stopped')
+    HttpHandler.storage = Storage(KEYS, args.cooldown)
+    server = HTTPServer((HOSTNAME, args.port), HttpHandler)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.server_close()
+        logging.debug("Server stopped.")
