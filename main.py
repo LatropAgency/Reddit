@@ -22,10 +22,10 @@ from datetime import datetime
 
 import requests
 
-from server import HOSTNAME
 from validators import unsigned_int_validator, logmode_validator
 
 PORT = 8087
+HOSTNAME = 'localhost'
 
 CSS_SELECTORS = {
     'POST': 'div.Post',
