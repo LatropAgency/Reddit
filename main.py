@@ -2,6 +2,7 @@ import logging
 import time
 
 from bs4 import BeautifulSoup
+from urllib3 import HTTPConnectionPool
 
 from logger_conf import configurate_logger
 
@@ -193,3 +194,5 @@ if __name__ == '__main__':
             logging.debug(f'The duration of the scraping: {datetime.now() - start}')
     except WebDriverException as e:
         logging.error(e)
+    except HTTPConnectionPool:
+        logging.error(f'Сan\'t connect to the server. {HOSTNAME}:{PORT}')
