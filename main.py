@@ -187,6 +187,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     configurate_logger(args.logmode)
-    with open_webdriver() as driver:
-        lookup(driver, args.count)
-        logging.debug(f'The duration of the scraping: {datetime.now() - start}')
+    try:
+        with open_webdriver() as driver:
+            lookup(driver, args.count)
+            logging.debug(f'The duration of the scraping: {datetime.now() - start}')
+    except WebDriverException as e:
+        logging.error(e)
