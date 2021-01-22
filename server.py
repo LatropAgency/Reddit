@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime
 import re
@@ -31,7 +32,9 @@ class Storage:
         self.keys = keys
         self.items = self.get_all()
         self.cooldown = cooldown
-        self.save()
+        t = threading.Thread(target=self.save, args=(cooldown,))
+        t.daemon = True
+        t.start()
 
     def get_all(self):
         filename = f'{datetime.today().strftime("reddit-%Y%m%d")}.txt'
@@ -40,15 +43,11 @@ class Storage:
             items = [line.split(';') for line in f.read().split('\n') if line != '']
         return {item[0]: dict(zip(self.keys, item)) for item in items}
 
-    def save(self):
-        for i in threading.enumerate():
-            if i.name == "MainThread":
-                break
-        else:
-            return
-        with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', "w") as file:
-            file.writelines([';'.join(item.values()) + '\n' for item in self.items.values()])
-        Timer(self.cooldown, self.save).start()
+    def save(self, cooldown):
+        while True:
+            with open(f'{datetime.today().strftime("reddit-%Y%m%d")}.txt', "w") as file:
+                file.writelines([';'.join(item.values()) + '\n' for item in self.items.values()])
+            time.sleep(cooldown)
 
     def get_by_id(self, id):
         return self.items.get(id, None)
@@ -160,6 +159,13 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         self.find_route('PUT')
+
+
+class HttpServer:
+    def __init__(self, hostname, port, storage):
+        HttpHandler.storage = storage
+        server = HTTPServer((hostname, port), HttpHandler)
+        server.serve_forever()
 
 
 if __name__ == "__main__":
